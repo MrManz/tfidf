@@ -2,17 +2,10 @@ package tfidf
 
 import (
 	"strings"
-	"fmt"
 	"sync"
 	"math"
 	"sort"
 )
-
-type freqValue float64
-
-func (n freqValue) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%.2f", n)), nil
-}
 
 type Frequency struct {
 	Word      string  `json:"word"`
@@ -35,10 +28,17 @@ func (f Frequencies) Swap(i, j int) {
 	f[i], f[j] = f[j], f[i]
 }
 
+type jsonDocumentForm struct{
+	filename string `json:"filename"`
+	frequencies Frequencies
+}
+
 type document struct {
 	wordMap     map[string]int
 	frequencies Frequencies
+	name string
 }
+
 
 type Evaluator struct {
 	sync.Mutex
@@ -46,7 +46,7 @@ type Evaluator struct {
 	wordsSeen map[string]int
 }
 
-func (e *Evaluator) AddDocument(text string) {
+func (e *Evaluator) AddDocument(text string, name string) {
 
 	e.Lock()
 	if len(e.wordsSeen) == 0 {
@@ -68,11 +68,11 @@ func (e *Evaluator) AddDocument(text string) {
 		wordMap[words[i]]++
 
 	}
-	docl := document{wordMap:wordMap}
+	d := document{wordMap:wordMap, name: name}
 
 	e.Lock()
 	defer e.Unlock()
-	e.documents = append(e.documents, docl)
+	e.documents = append(e.documents, d)
 }
 
 func (e *Evaluator) calcTFIDF(num int){
@@ -103,13 +103,16 @@ func (e *Evaluator) ForDocsCalcTFIDF() {
 	}
 }
 
-func (e *Evaluator) GetValues ()[]Frequencies {
-	var values []Frequencies
+func (e *Evaluator) GetValues ()[]jsonDocumentForm {
+	var values []jsonDocumentForm
 	for i := range e.documents {
-		values = append(values, e.documents[i].frequencies)
+		formatetDocument := jsonDocumentForm{frequencies:e.documents[i].frequencies[:5], filename: e.documents[i].name}
+		values = append(values, formatetDocument)
 	}
 	return values
 }
+
+// Utility functions
 
 func getMaxFreq(wordMap map[string]int) int {
 	var maxFreq int
@@ -122,6 +125,7 @@ func getMaxFreq(wordMap map[string]int) int {
 }
 
 func cleanString(s string) string {
+	// TODO: Add Replacer for better runtime
 	charsToClean := []string{".", "!", "?", "\"", ",", "„", "“", "(", ")", "–", ":", "&", "/"}
 	for i := range charsToClean {
 		s = strings.Replace(s, charsToClean[i], " ", -1)
